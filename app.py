@@ -101,28 +101,18 @@ def main():
         st.subheader("Debug Information")
         st.write("This section is for troubleshooting the app.")
         
-        with st.expander("Test direct chemical detection"):
+        with st.expander("Test chemical extraction"):
             test_query = st.text_input("Test query:", "What is benzene?")
             if st.button("Test extraction"):
                 st.write(f"Testing extraction for: '{test_query}'")
                 try:
-                    # Direct extraction without using the LLM
-                    query_lower = test_query.lower()
-                    detected = False
-                    
-                    for chemical, aliases in extractor.COMMON_CHEMICALS.items():
-                        for alias in aliases:
-                            if alias in query_lower or f"what is {alias}" in query_lower:
-                                st.success(f"Direct match: {chemical}")
-                                detected = True
-                                break
-                    
-                    if not detected:
-                        st.warning("No direct match found. Would use LLM fallback in normal operation.")
-                        
-                    # Try the full extraction
+                    # Use the LLM-based extraction
                     result = extractor.extract_chemical_name(test_query)
-                    st.info(f"Full extraction result: {result}")
+                    
+                    if result:
+                        st.success(f"Extracted chemical: {result}")
+                    else:
+                        st.warning("No chemical detected in the query")
                     
                 except Exception as e:
                     st.error(f"Error during test: {str(e)}")
