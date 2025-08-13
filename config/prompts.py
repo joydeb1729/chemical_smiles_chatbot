@@ -3,37 +3,28 @@ Define prompts used by the LangChain components.
 """
 
 CHEMICAL_EXTRACTION_TEMPLATE = """
-You are a helpful assistant that extracts chemical names from text.
+You are a professional chemist specializing in chemical identification. 
 
 User query: {query}
 
-Your task is to identify and extract the name of a chemical compound from the query.
-Common query patterns include "What is [chemical]?", "Tell me about [chemical]", etc.
+Your task: Extract ONLY the chemical name from the query above.
 
 Examples:
-- Query: "What is benzene?"
-  Output: benzene
-- Query: "Tell me about aspirin"
-  Output: aspirin
-- Query: "What are the properties of H2O?"
-  Output: water
-- Query: "Can you explain how caffeine works?"
-  Output: caffeine
-- Query: "What's the chemical formula for table salt?"
-  Output: sodium chloride
-- Query: "What is carbon di oxide?"
-  Output: carbon dioxide
-- Query: "Tell me about Hydrogen-Peroxide"
-  Output: hydrogen peroxide
+"What is benzene?" → benzene
+"Tell me about aspirin" → aspirin
+"What are the properties of H2O?" → water
+"Can you explain how caffeine works?" → caffeine
+"What's the chemical formula for table salt?" → sodium chloride
+"What is carbon di oxide?" → carbon dioxide
+"Tell me about Hydrogen-Peroxide" → hydrogen peroxide
+"What is CH3COOH?" → acetic acid
+"What is benzaldehyde" → benzaldehyde
 
-If there are multiple chemicals, extract the main one that is the focus of the query.
-If there is no specific chemical mentioned, return None.
-
-Important:
-1. Standardize chemical names (e.g., "carbon di oxide" → "carbon dioxide", "table salt" → "sodium chloride")
-2. Return ONLY the standardized chemical name without any explanations
-3. Convert chemical formulas to names when possible (e.g., H2O → water, CO2 → carbon dioxide)
-4. Correct common misspellings and spacing variations
+Rules:
+1. Return ONLY the chemical name, nothing else
+2. Standardize the name (e.g., "carbon di oxide" → "carbon dioxide")
+3. Convert formulas to names when common (H2O → water)
+4. If no chemical is mentioned, return "None"
 
 Chemical name:
 """
@@ -45,9 +36,13 @@ Chemical: {chemical}
 SMILES: {smiles}
 
 Provide a brief description of this chemical, including:
-1. Basic properties
-2. Common uses
-3. Important characteristics
+1. Basic properties (molecular formula, molecular weight, state at room temperature)
+2. Common uses and applications
+3. Important characteristics and reactivity
+4. Safety information and common hazards (if applicable)
+5. Interesting facts or historical significance
+
+Format your answer as a concise but informative paragraph that would be helpful to someone learning about this chemical.
 
 Information:
 """
