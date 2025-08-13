@@ -1,0 +1,131 @@
+import streamlit as st
+import base64
+import os
+from io import BytesIO
+
+# Import local modules
+from src.models.llama_model import LlamaModel
+from src.chains.chemical_extractor import ChemicalExtractor
+from src.services.smiles_lookup import SMILESLookup
+from src.services.molecule_renderer import MoleculeRenderer
+from src.utils.logging_utils import setup_logger
+from config.settings import APP_TITLE, APP_DESCRIPTION, MODEL_PATH
+
+# Setup logging
+logger = setup_logger(__name__)
+
+def load_css():
+    """Load custom CSS"""
+    with open(os.path.join("static", "css", "style.css")) as f:
+        st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+
+def main():
+    # Load the model and initialize components
+    @st.cache_resource
+    def load_model():
+        logger.info("Loading LLaMA model...")
+        model = LlamaModel()
+        return model
+    
+    @st.cache_resource
+    def init_components(_model):
+        # Using leading underscore to tell Streamlit not to hash this argument
+        extractor = ChemicalExtractor(_model)
+        smiles_lookup = SMILESLookup()
+        renderer = MoleculeRenderer()
+        return extractor, smiles_lookup, renderer
+    
+    # Page configuration
+    st.set_page_config(
+        page_title=APP_TITLE,
+        page_icon="🧪",
+        layout="wide"
+    )
+    
+    # Load custom CSS
+    load_css()
+    
+    # App header
+    st.title(APP_TITLE)
+    st.markdown(APP_DESCRIPTION)
+    
+    # Initialize model and components
+    with st.spinner("Loading model and components..."):
+        model = load_model()
+        extractor, smiles_lookup, renderer = init_components(model)
+    
+    # User input
+    user_query = st.text_input("Enter your chemical query:", placeholder="What is benzene?")
+    
+    if user_query:
+        with st.spinner("Processing your query..."):
+            # Log the query for debugging
+            logger.info(f"Processing query: {user_query}")
+            
+            try:
+                # Extract chemical name from query
+                chemical_name = extractor.extract_chemical_name(user_query)
+                
+                if chemical_name:
+                    st.success(f"Detected chemical: {chemical_name}")
+                    
+                    # Look up SMILES
+                    try:
+                        smiles = smiles_lookup.get_smiles(chemical_name)
+                        st.info(f"SMILES: {smiles}")
+                        
+                        # Render molecule
+                        if smiles:
+                            img = renderer.render_molecule(smiles)
+                            if img:
+                                st.image(img, caption=f"Structure of {chemical_name}")
+                    except Exception as e:
+                        st.error(f"Error looking up chemical: {str(e)}")
+                        logger.error(f"SMILES lookup error: {str(e)}")
+                else:
+                    st.warning("No specific chemical detected in your query. Please try again with a different query.")
+                    logger.warning(f"No chemical detected in query: {user_query}")
+            except Exception as e:
+                st.error(f"Error processing query: {str(e)}")
+                logger.error(f"Query processing error: {str(e)}", exc_info=True)
+    
+    # Additional information
+    with st.expander("About this app"):
+        st.markdown("""
+        This app uses a local LLaMA model to extract chemical names from natural language queries,
+        then fetches their SMILES representation from PubChem, and renders the molecular structure.
+        """)
+        
+    # Debug section
+    if st.checkbox("Show debug information", False):
+        st.subheader("Debug Information")
+        st.write("This section is for troubleshooting the app.")
+        
+        with st.expander("Test direct chemical detection"):
+            test_query = st.text_input("Test query:", "What is benzene?")
+            if st.button("Test extraction"):
+                st.write(f"Testing extraction for: '{test_query}'")
+                try:
+                    # Direct extraction without using the LLM
+                    query_lower = test_query.lower()
+                    detected = False
+                    
+                    for chemical, aliases in extractor.COMMON_CHEMICALS.items():
+                        for alias in aliases:
+                            if alias in query_lower or f"what is {alias}" in query_lower:
+                                st.success(f"Direct match: {chemical}")
+                                detected = True
+                                break
+                    
+                    if not detected:
+                        st.warning("No direct match found. Would use LLM fallback in normal operation.")
+                        
+                    # Try the full extraction
+                    result = extractor.extract_chemical_name(test_query)
+                    st.info(f"Full extraction result: {result}")
+                    
+                except Exception as e:
+                    st.error(f"Error during test: {str(e)}")
+
+if __name__ == "__main__":
+    main()
