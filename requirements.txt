@@ -1,0 +1,10 @@
+streamlit
+langchain
+langchain-community
+llama-cpp-python
+pubchempy
+requests
+
+# Install chemistry packages via conda
+#conda install -c conda-forge rdkit chemdataextractor scispacy spacy
+
