@@ -6,42 +6,17 @@ import pubchempy as pcp
 import os
 import json
 import time
-import requests
 from datetime import datetime
+from py2opsin import py2opsin
 
 from src.utils.logging_utils import setup_logger
 from config.settings import PUBCHEM_TIMEOUT, CACHE_DIR, CACHE_EXPIRY
 
 logger = setup_logger(__name__)
 
-# Mapping of common chemicals with their SMILES representations
-COMMON_CHEMICALS = {
-    "benzene": "C1=CC=CC=C1",
-    "water": "O",
-    "methane": "C",
-    "ethanol": "CCO",
-    "aspirin": "CC(=O)OC1=CC=CC=C1C(=O)O",
-    "caffeine": "CN1C=NC2=C1C(=O)N(C(=O)N2C)C",
-    "acetaminophen": "CC(=O)NC1=CC=C(C=C1)O",
-    "glucose": "C(C1C(C(C(C(O1)O)O)O)O)O",
-    "sodium chloride": "[Na+].[Cl-]",
-    "methylbenzene": "CC1=CC=CC=C1",  # toluene
-    "ethylbenzene": "CCC1=CC=CC=C1",
-    "propylbenzene": "CCCC1=CC=CC=C1",
-    "carbon dioxide": "O=C=O",
-    "benzaldehyde": "C1=CC=C(C=C1)C=O",
-    "acetone": "CC(=O)C",
-    "ethylene": "C=C",
-    "propylene": "CC=C",
-    "ammonia": "N",
-    "hydrogen peroxide": "OO",
-    "formaldehyde": "C=O",
-    "acetic acid": "CC(=O)O"
-}
-
 class SMILESLookup:
     """
-    Class to look up SMILES representations of chemicals using PubChem.
+    Class to look up SMILES representations of chemicals using OPSIN and PubChem.
     """
     
     def __init__(self, use_cache=True):
@@ -115,35 +90,8 @@ class SMILESLookup:
         # Normalize the chemical name
         chemical_name_lower = chemical_name.lower()
         
-        # Normalize some common variations
-        chemical_variations = {
-            "paracetamol": "acetaminophen",
-            "salt": "sodium chloride",
-            "table salt": "sodium chloride",
-            "toluene": "methylbenzene",
-            "carbon di oxide": "carbon dioxide"
-        }
-        
-        if chemical_name_lower in chemical_variations:
-            chemical_name_lower = chemical_variations[chemical_name_lower]
-            logger.info(f"Normalized chemical name: {chemical_name} -> {chemical_name_lower}")
-        
-        # Direct lookup for common chemicals without API calls
-        if chemical_name_lower in COMMON_CHEMICALS:
-            logger.info(f"Direct lookup for {chemical_name} in predefined list")
-            smiles = COMMON_CHEMICALS[chemical_name_lower]
-            
-            # Cache the result if caching is enabled
-            if self.use_cache:
-                self.cache[chemical_name_lower] = {
-                    'smiles': smiles,
-                    'timestamp': time.time(),
-                    'date': datetime.now().isoformat(),
-                    'source': 'predefined'
-                }
-                self._save_cache()
-                
-            return smiles
+        # Debug: Log the exact chemical name and format we're looking up
+        logger.info(f"Looking up chemical: '{chemical_name}' (normalized: '{chemical_name_lower}')")
         
         # Check cache first if enabled
         if self.use_cache and chemical_name_lower in self.cache:
@@ -154,20 +102,16 @@ class SMILESLookup:
             else:
                 logger.info(f"Cached SMILES for {chemical_name} expired")
         
-        # First try OPSIN service (more reliable for systematic names)
+        # First try using py2opsin (a Python wrapper for OPSIN)
         try:
-            logger.info(f"Looking up SMILES for {chemical_name} using OPSIN")
-            # URL encode the chemical name to handle spaces and special characters
-            import urllib.parse
-            encoded_name = urllib.parse.quote(chemical_name)
-            opsin_url = f"https://opsin.ch.cam.ac.uk/opsin/{encoded_name}.smiles"
+            logger.info(f"Looking up SMILES for {chemical_name} using py2opsin")
             
-            response = requests.get(opsin_url, timeout=10)
+            # Try to get SMILES using py2opsin
+            smiles = py2opsin(chemical_name=chemical_name, output_format="SMILES")
             
-            # OPSIN returns an error message when it can't parse a name
-            if response.status_code == 200 and response.text and "FAILED" not in response.text and "ERROR" not in response.text:
-                smiles = response.text.strip()
-                logger.info(f"Found SMILES for {chemical_name} using OPSIN: {smiles}")
+            # Check if we got a valid result
+            if smiles and len(smiles) > 0:
+                logger.info(f"Found SMILES for {chemical_name} using py2opsin: {smiles}")
                 
                 # Cache the result if caching is enabled
                 if self.use_cache:
@@ -175,39 +119,31 @@ class SMILESLookup:
                         'smiles': smiles,
                         'timestamp': time.time(),
                         'date': datetime.now().isoformat(),
-                        'source': 'opsin'
+                        'source': 'py2opsin'
                     }
                     self._save_cache()
                 
                 return smiles
             else:
-                logger.warning(f"OPSIN could not parse chemical name: {chemical_name}. Response: {response.text[:100]}")
+                logger.warning(f"py2opsin returned empty result for {chemical_name}")
         except Exception as e:
-            logger.warning(f"OPSIN lookup failed for {chemical_name}: {str(e)}")
-            
+            logger.warning(f"py2opsin lookup failed for {chemical_name}: {str(e)}")
+        
         # Try with alternate chemical name formats
         alt_names = [
-            chemical_name,
             chemical_name.replace(" ", ""),  # No spaces
             chemical_name.replace("-", ""),  # No hyphens
             chemical_name.replace(" ", "-")  # Replace spaces with hyphens
         ]
         
         for alt_name in alt_names:
-            if alt_name == chemical_name:
-                continue  # Skip the original name as we already tried it
-                
             try:
-                logger.info(f"Trying alternate format for OPSIN: {alt_name}")
-                import urllib.parse
-                encoded_name = urllib.parse.quote(alt_name)
-                opsin_url = f"https://opsin.ch.cam.ac.uk/opsin/{encoded_name}.smiles"
+                logger.info(f"Trying alternate format with py2opsin: {alt_name}")
                 
-                response = requests.get(opsin_url, timeout=10)
+                smiles = py2opsin(chemical_name=alt_name, output_format="SMILES")
                 
-                if response.status_code == 200 and response.text and "FAILED" not in response.text and "ERROR" not in response.text:
-                    smiles = response.text.strip()
-                    logger.info(f"Found SMILES for alternate name {alt_name} using OPSIN: {smiles}")
+                if smiles and len(smiles) > 0:
+                    logger.info(f"Found SMILES for alternate name {alt_name} using py2opsin: {smiles}")
                     
                     # Cache the result if caching is enabled
                     if self.use_cache:
@@ -215,15 +151,15 @@ class SMILESLookup:
                             'smiles': smiles,
                             'timestamp': time.time(),
                             'date': datetime.now().isoformat(),
-                            'source': 'opsin_alternate'
+                            'source': 'py2opsin_alternate'
                         }
                         self._save_cache()
                     
                     return smiles
             except Exception as e:
-                logger.warning(f"OPSIN alternate format lookup failed for {alt_name}: {str(e)}")
+                logger.warning(f"py2opsin alternate format lookup failed for {alt_name}: {str(e)}")
         
-        # If OPSIN fails, try PubChem
+        # If py2opsin fails, try PubChem
         try:
             logger.info(f"Looking up SMILES for {chemical_name} using PubChem")
             
@@ -232,47 +168,30 @@ class SMILESLookup:
             
             if compounds:
                 # Get the SMILES for the first (most relevant) compound
-                smiles = compounds[0].canonical_smiles
+                compound = compounds[0]
                 
-                # Cache the result if caching is enabled
-                if self.use_cache:
-                    self.cache[chemical_name_lower] = {
-                        'smiles': smiles,
-                        'timestamp': time.time(),
-                        'date': datetime.now().isoformat(),
-                        'source': 'pubchem'
-                    }
-                    self._save_cache()
-                
-                logger.info(f"Found SMILES for {chemical_name} using PubChem: {smiles}")
-                return smiles
+                # Verify we have a valid compound with a canonical SMILES
+                if hasattr(compound, 'canonical_smiles') and compound.canonical_smiles:
+                    smiles = compound.canonical_smiles
+                    
+                    # Cache the result if caching is enabled
+                    if self.use_cache:
+                        self.cache[chemical_name_lower] = {
+                            'smiles': smiles,
+                            'timestamp': time.time(),
+                            'date': datetime.now().isoformat(),
+                            'source': 'pubchem'
+                        }
+                        self._save_cache()
+                    
+                    logger.info(f"Found SMILES for {chemical_name} using PubChem: {smiles}")
+                    return smiles
+                else:
+                    logger.warning(f"Compound found for {chemical_name} in PubChem, but no SMILES available")
             else:
                 logger.warning(f"No compounds found for {chemical_name} in PubChem")
         except Exception as e:
             logger.error(f"PubChem lookup failed for {chemical_name}: {str(e)}")
-        
-        # If all online services fail, check if we have a predefined SMILES
-        if chemical_name_lower in COMMON_CHEMICALS:
-            logger.info(f"Using predefined SMILES for {chemical_name}")
-            smiles = COMMON_CHEMICALS[chemical_name_lower]
-            
-            # Cache the result if caching is enabled
-            if self.use_cache:
-                self.cache[chemical_name_lower] = {
-                    'smiles': smiles,
-                    'timestamp': time.time(),
-                    'date': datetime.now().isoformat(),
-                    'source': 'predefined'
-                }
-                self._save_cache()
-                
-            return smiles
-            
-        # Check if any similar named chemicals are available
-        for common_name, smiles in COMMON_CHEMICALS.items():
-            if common_name in chemical_name_lower or chemical_name_lower in common_name:
-                logger.info(f"Using similar chemical SMILES for {chemical_name} -> {common_name}")
-                return smiles
         
         logger.error(f"Could not find SMILES for {chemical_name} using any method")
         return None
