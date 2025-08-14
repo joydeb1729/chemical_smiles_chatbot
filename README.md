@@ -101,12 +101,29 @@ You can run the Jupyter Notebook in the `experiments` folder to test the pipelin
 jupyter notebook experiments/chemical_smiles_test.ipynb
 ```
 
+## SMILES Lookup
+
+The application uses multiple methods to lookup SMILES representations for chemical names:
+
+1. **py2opsin** - Primary lookup method that uses the OPSIN library (via py2opsin wrapper) to convert chemical names to SMILES
+2. **Alternate Name Formats** - Tries variations of the chemical name (no spaces, no hyphens, etc.)
+3. **PubChem API** - Used as a fallback when py2opsin fails
+4. **Caching** - Results are cached to improve performance and reduce API calls
+
+### Caching
+
+The application maintains a local cache of SMILES lookups in `data/cache/smiles_cache.json`. This cache:
+- Stores successful lookups with timestamps
+- Has an expiry time (configurable in settings.py)
+- Includes the source of the SMILES (py2opsin, pubchem, etc.)
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Acknowledgments
 
+- OPSIN (Open Parser for Systematic IUPAC Nomenclature) via py2opsin for chemical name to SMILES conversion
 - PubChem for providing chemical data
 - RDKit for molecular rendering capabilities
 - LangChain for the LLM interaction framework
