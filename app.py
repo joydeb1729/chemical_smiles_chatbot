@@ -93,7 +93,7 @@ def main():
     with st.expander("About this app"):
         st.markdown("""
         This app uses a local LLaMA model to extract chemical names from natural language queries,
-        then fetches their SMILES representation from PubChem, and renders the molecular structure.
+        then fetches their SMILES representation from OPSIN, and renders the molecular structure.
         """)
         
     # Debug section
