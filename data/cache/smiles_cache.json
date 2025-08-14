@@ -1,0 +1,14 @@
+{
+  "benzoic acid": {
+    "smiles": "C(C1=CC=CC=C1)(=O)O",
+    "timestamp": 1755197871.9044049,
+    "date": "2025-08-15T00:57:51.904412",
+    "source": "py2opsin"
+  },
+  "water": {
+    "smiles": "O",
+    "timestamp": 1755197897.7822852,
+    "date": "2025-08-15T00:58:17.782289",
+    "source": "py2opsin"
+  }
+}
