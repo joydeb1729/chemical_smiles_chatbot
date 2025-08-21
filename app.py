@@ -8,6 +8,7 @@ from src.models.llama_model import LlamaModel
 from src.chains.chemical_extractor import ChemicalExtractor
 from src.services.smiles_lookup import SMILESLookup
 from src.services.molecule_renderer import MoleculeRenderer
+from src.services.molecule_3d_visualizer import Molecule3DVisualizer
 from src.utils.logging_utils import setup_logger
 from config.settings import APP_TITLE, APP_DESCRIPTION, MODEL_PATH
 
@@ -76,7 +77,8 @@ def main():
         extractor = ChemicalExtractor(_model)
         smiles_lookup = SMILESLookup()
         renderer = MoleculeRenderer()
-        return extractor, smiles_lookup, renderer
+        visualizer_3d = Molecule3DVisualizer()
+        return extractor, smiles_lookup, renderer, visualizer_3d
     
     # Page configuration
     st.set_page_config(
@@ -95,7 +97,7 @@ def main():
     # Initialize model and components
     with st.spinner("Loading model and components..."):
         model = load_model()
-        extractor, smiles_lookup, renderer = init_components(model)
+        extractor, smiles_lookup, renderer, visualizer_3d = init_components(model)
     
     # User input
     user_query = st.text_input("Enter your chemical query:", placeholder="What is benzene?")
@@ -120,13 +122,103 @@ def main():
                     # Look up SMILES
                     try:
                         smiles = smiles_lookup.get_smiles(chemical_name)
-                        st.info(f"SMILES: {smiles}")
-                        
-                        # Render molecule
                         if smiles:
-                            img = renderer.render_molecule(smiles)
+                            st.info(f"**SMILES:** `{smiles}`")
+                            
+                            # Create tabs for different visualizations
+                            tab1, tab2, tab3, tab4 = st.tabs(["2D Structure", "3D Standard View", "3D Enhanced View", "Bond Analysis"])
+                            
+                            with tab1:
+                                st.subheader("2D Molecular Structure")
+                                # Render 2D molecule
+                                img = renderer.render_molecule(smiles)
+                                if img:
+                                    st.image(img, caption=f"2D Structure of {chemical_name}")
+                                else:
+                                    st.warning("Could not generate 2D structure")
+                            
+                            with tab2:
+                                st.subheader("3D Standard Visualization")
+                                try:
+                                    with st.spinner("Generating 3D standard view..."):
+                                        view_3d, bond_angles = visualizer_3d.visualize_molecule_standard(smiles, chemical_name)
+                                    
+                                    if view_3d:
+                                        # Display the 3D visualization using _make_html() for Streamlit
+                                        html_content = view_3d._make_html()
+                                        st.components.v1.html(html_content, width=820, height=620)
+                                        st.success("Interactive 3D model generated! You can rotate, zoom, and explore the molecule.")
+                                    else:
+                                        st.error("Could not generate 3D standard view")
+                                        
+                                except Exception as e:
+                                    st.error(f"Error generating 3D standard view: {str(e)}")
+                            
+                            with tab3:
+                                st.subheader("3D Enhanced Visualization")
+                                try:
+                                    with st.spinner("Generating 3D enhanced view..."):
+                                        view_3d_enhanced = visualizer_3d.visualize_molecule_enhanced(smiles, chemical_name)
+                                    
+                                    if view_3d_enhanced:
+                                        # Display the enhanced 3D visualization using _make_html() for Streamlit
+                                        html_content_enhanced = view_3d_enhanced._make_html()
+                                        st.components.v1.html(html_content_enhanced, width=820, height=620)
+                                        st.success("Enhanced 3D model generated!")
+                                        st.info("🎮 **Controls:** Left click + drag to rotate, scroll to zoom, right click + drag to pan")
+                                    else:
+                                        st.error("Could not generate 3D enhanced view")
+                                        
+                                except Exception as e:
+                                    st.error(f"Error generating 3D enhanced view: {str(e)}")
+                            
+                            with tab4:
+                                st.subheader("Bond Angle Analysis")
+                                try:
+                                    # Get bond angles from the standard visualization
+                                    if 'bond_angles' in locals() and bond_angles:
+                                        st.write(f"**Total Bond Angles Found:** {len(bond_angles)}")
+                                        
+                                        # Create a dropdown to show bond angles
+                                        with st.expander("📐 View Bond Angles Details", expanded=False):
+                                            if len(bond_angles) > 0:
+                                                # Create a formatted table
+                                                bond_data = []
+                                                for i, (n1, atom1, atom2, n2, angle) in enumerate(bond_angles):
+                                                    bond_data.append({
+                                                        "Angle #": i + 1,
+                                                        "Atoms": f"{n1}-{atom1}-{atom2}-{n2}",
+                                                        "Angle (°)": f"{angle:.2f}°"
+                                                    })
+                                                
+                                                # Display in a nice table format
+                                                import pandas as pd
+                                                df = pd.DataFrame(bond_data)
+                                                st.dataframe(df, use_container_width=True)
+                                                
+                                                # Show statistics
+                                                angles_only = [angle for _, _, _, _, angle in bond_angles]
+                                                col1, col2, col3 = st.columns(3)
+                                                with col1:
+                                                    st.metric("Average Angle", f"{sum(angles_only)/len(angles_only):.2f}°")
+                                                with col2:
+                                                    st.metric("Min Angle", f"{min(angles_only):.2f}°")
+                                                with col3:
+                                                    st.metric("Max Angle", f"{max(angles_only):.2f}°")
+                                            else:
+                                                st.warning("No bond angles could be calculated for this molecule")
+                                    else:
+                                        st.info("Generate 3D Standard View first to calculate bond angles")
+                                        
+                                except Exception as e:
+                                    st.error(f"Error analyzing bond angles: {str(e)}")
+                        else:
+                            st.warning("Could not find SMILES representation for this chemical")
+                            # Still show 2D structure if available
+                            img = renderer.render_molecule(smiles) if smiles else None
                             if img:
-                                st.image(img, caption=f"Structure of {chemical_name}")
+                                st.image(img, caption=f"2D Structure of {chemical_name}")
+                            
                     except Exception as e:
                         st.error(f"Error looking up chemical: {str(e)}")
                         logger.error(f"SMILES lookup error: {str(e)}")
