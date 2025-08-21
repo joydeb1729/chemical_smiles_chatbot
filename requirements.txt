@@ -5,6 +5,11 @@ llama-cpp-python
 pubchempy
 requests
 py2opsin
+py3Dmol 
+rdkit
+numpy
+pickle-mixin
+pandas
 
 # Install chemistry packages via conda
 #conda install -c conda-forge rdkit chemdataextractor scispacy spacy
