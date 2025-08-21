@@ -19,38 +19,48 @@ def load_css():
     with open(os.path.join("static", "css", "style.css")) as f:
         st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
-def get_chemical_description(chemical_name):
+def get_chemical_description(chemical_name, extractor):
     """
-    Get a brief 1-2 sentence description of a chemical compound.
+    Get a brief 1-2 sentence description of a chemical compound using LLM.
     
     Args:
         chemical_name (str): Name of the chemical
+        extractor: ChemicalExtractor instance with LLM
         
     Returns:
         str: Brief description of the chemical
     """
-    chemical_descriptions = {
-        "benzene": "Benzene is an organic compound with the formula C₆H₆, known for its distinctive ring structure. It's a colorless, highly flammable liquid with a sweet odor, widely used in industry as a precursor to other chemicals.",
-        "toluene": "Toluene is an aromatic hydrocarbon with formula C₇H₈, consisting of a benzene ring with a methyl group. It's a colorless liquid commonly used as a solvent and in the production of other chemicals.",
-        "acetaldehyde": "Acetaldehyde is an organic compound with formula C₂H₄O, produced naturally during metabolism. It's a colorless, volatile liquid with a pungent, fruity odor, used in various industrial processes.",
-        "ethanol": "Ethanol is a simple alcohol with formula C₂H₆O, commonly known as drinking alcohol. It's a colorless, volatile liquid widely used as a solvent, fuel, and in beverages.",
-        "methanol": "Methanol is the simplest alcohol with formula CH₄O, also known as wood alcohol. It's a colorless, toxic liquid used as a solvent, antifreeze, and fuel.",
-        "methane": "Methane is the simplest hydrocarbon with formula CH₄, the main component of natural gas. It's a colorless, odorless gas that serves as a major energy source and greenhouse gas.",
-        "water": "Water is a transparent, odorless, tasteless liquid with formula H₂O. It's essential for all known forms of life and covers about 71% of Earth's surface.",
-        "carbon dioxide": "Carbon dioxide is a colorless gas with formula CO₂, produced by respiration and combustion. It's a crucial greenhouse gas and is used in photosynthesis by plants.",
-        "acetone": "Acetone is an organic solvent with formula C₃H₆O, naturally produced in small amounts by the human body. It's a colorless, volatile liquid commonly used in nail polish remover and as an industrial solvent.",
-        "caffeine": "Caffeine is a natural stimulant alkaloid found in coffee, tea, and many other plants. It's widely consumed to increase alertness and reduce fatigue.",
-        "aspirin": "Aspirin is a medication used to reduce pain, fever, and inflammation. It's also used in low doses as a blood thinner to prevent heart attacks and strokes.",
-        "glucose": "Glucose is a simple sugar with formula C₆H₁₂O₆, the primary source of energy for living organisms. It's found naturally in fruits and honey and is produced during photosynthesis.",
-        "sodium chloride": "Sodium chloride, commonly known as table salt, has the formula NaCl. It's essential for life, used in food preparation, and plays important roles in biological processes.",
-        "hydrogen peroxide": "Hydrogen peroxide is a chemical compound with formula H₂O₂, used as a disinfectant and bleaching agent. It naturally occurs in small amounts in the human body as a byproduct of metabolism.",
-        "sulfuric acid": "Sulfuric acid is a highly corrosive strong mineral acid with formula H₂SO₄. It's widely used in industrial processes, including battery acid and chemical manufacturing.",
-        "ammonia": "Ammonia is a compound with formula NH₃, consisting of nitrogen and hydrogen. It's a colorless gas with a distinctive pungent smell, commonly used in fertilizers and cleaning products."
-    }
-    
-    # Return known description or generate a generic fallback
-    return chemical_descriptions.get(chemical_name.lower(), 
-                                   "This chemical is commonly used in research and industrial applications.")
+    try:
+        # Create a prompt for generating a short description
+        description_prompt = f"""
+You are a chemistry expert. Provide a brief 1-2 sentence description of {chemical_name}.
+Include its chemical formula if known, and mention its main properties or uses.
+Keep it concise and informative.
+
+Chemical: {chemical_name}
+
+Description:
+"""
+        
+        # Generate description using the LLM
+        logger.info(f"Generating description for {chemical_name} using LLM")
+        description = extractor.llm.generate(description_prompt)
+        
+        # Clean up the response
+        description = description.strip()
+        
+        # If the response is too long, truncate to first 2 sentences
+        sentences = description.split('.')
+        if len(sentences) > 2:
+            description = '. '.join(sentences[:2]) + '.'
+            
+        logger.info(f"Generated description for {chemical_name}: {description[:100]}...")
+        return description
+        
+    except Exception as e:
+        logger.error(f"Error generating description for {chemical_name}: {str(e)}")
+        # Fallback to generic message if LLM fails
+        return "This chemical is commonly used in research and industrial applications."
 
 def main():
     # Load the model and initialize components
@@ -102,8 +112,9 @@ def main():
                 if chemical_name:
                     st.success(f"Detected chemical: {chemical_name}")
                     
-                    # Show chemical description immediately
-                    description = get_chemical_description(chemical_name)
+                    # Show chemical description immediately (generated by LLM)
+                    with st.spinner("Generating description..."):
+                        description = get_chemical_description(chemical_name, extractor)
                     st.info(f"**About {chemical_name}:** {description}")
                     
                     # Look up SMILES
